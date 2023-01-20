@@ -304,20 +304,20 @@ def depth_correct_Eric(UUwindow, fwindow, em_z, w, Cmax, fs):
 
     k_mat = np.tile(k_array, (UUwindow.shape[0], UUwindow.shape[1], 1))
     kWT = 1*k_mat*0.1*(w/fs)
-    G = np.square((np.square(np.pi)/(np.square(kWT/2)+np.square(np.pi)))*(np.sinh(kWT/2)/(kWT)))
-    G_mod = np.square((1/(2*np.pi))*np.sinh(kWT/2)/(np.power(kWT/(2*np.pi), 3)+kWT/(2*np.pi)))
-    UUwindow3_G1 = UUwindow_out/G_mod
+    G = np.square( (np.square(np.pi)/(np.square(kWT/2)+np.square(np.pi)))*(np.sinh(kWT/2)/(kWT/2)) )
+    #G_mod = np.square((1/(2*np.pi))*np.sinh(kWT/2)/(np.power(kWT/(2*np.pi), 3)+kWT/(2*np.pi)))
+    UUwindow3_G1 = UUwindow_out/G
     #print(np.nanmean(np.nanmean(G_mod, axis=0), axis=0))
 
     ### Try the 1s sampling correction
     #These are Andy's numbers
-    #d1 = 0.004897
-    #d2 = 0.033609
-    #d3 = 0.999897
+    d1 = 0.004897
+    d2 = 0.033609
+    d3 = 0.999897
     #these are eric's numbers
-    d1 = 0.001642
-    d2 = 0.018517
-    d3 = 0.999528
+    #d1 = 0.001642
+    #d2 = 0.018517
+    #d3 = 0.999528
     G2 = d1*np.square(kWT)+d2*kWT+d3
     UUwindow3_G2 = UUwindow3_G1/G2
 
@@ -329,9 +329,10 @@ def depth_correct_Eric(UUwindow, fwindow, em_z, w, Cmax, fs):
     z_mat = np.tile(np.expand_dims(np.nanmean(z_mat, axis=2), axis=2), (1, 1, len(k_mat[0, 0, :])))
 
     #G3 = 1/np.square(1+2*h*(np.cosh((2*omega*dw+np.square(dw)*z_mat)/9.8)-1))
-    G3 = 1/(1+2*h*(np.cosh((z_mat*np.square(omega_mat+dw)-np.square(omega_mat))/9.8)-1))
-    UUwindow3_G3 = UUwindow3_G2*G3
+    G3 = np.square((1+2*h*(np.cosh(z_mat*(np.square(omega_mat+dw)-np.square(omega_mat))/9.8)-1)))
+    UUwindow3_G3 = UUwindow3_G2/G3
     
+    ##IS this one supposed to be multiplied??
     
     
     
