@@ -13,6 +13,8 @@ that has all the different processing steps as different methods, but I don't fe
 
 
 import numpy as np
+import warnings
+import matplotlib.pyplot as plt
 
 #Reshape the data into 120s chunks etc for taking spectra
 #Here I'm doing it with a 50% overlap
@@ -62,7 +64,7 @@ def reshape_u(u, em_z, nblock, overlap, fs):
     #First need to rearrange the velocities into the 120s chunks w/ 50% overlap 
     nout = 0
     
-    for i1 in range(0, tseries_l-nblock, slide):
+    for i1 in range(0, tseries_l-nblock+1, slide):
         j = list(range(i1, i1+nblock))
         if len(u.shape)==2:
             u_new[:, nout, :] = u[:, j]
@@ -117,14 +119,26 @@ def make_vel_spectrum(u_new, fs):
     #Taper the window
     uwindowtaper = uwindow * taper_out
 
-
+    #print(uwindowtaper)
+    #print(np.nanvar(uwindowtaper))
+    #print(np.nanvar(uwindow))
+    
     #Rescale
-    factor = np.sqrt(np.var(uwindow)/np.var(uwindowtaper))
+    factor = np.sqrt(np.nanvar(uwindow)/np.nanvar(uwindowtaper))
+    
+    #print(factor)
     
     uwindowready = uwindowtaper*factor
 
+    #print(uwindowready)
+    
+    #test plot
+    #plt.figure()
+    #plt.plot(np.transpose(uwindowready))
+    
     #Take fft
     Uwindow = np.fft.fft(uwindowready)
+    #print(Uwindow)
     fwindow = np.fft.fftfreq(uwindowready.shape[-1], d=1/fs)
     fwindow=fwindow[:int(w/2)]
 
@@ -153,24 +167,39 @@ def sig_wave_height(f, spec):
     
     To Do: Does this work with 2d Spec v
     """
-    
-    
-    ##Need to remove Nan's
-    num_specs = spec.shape[1]
-    print(spec.shape)
-    swhs = np.zeros(num_specs)
-    for i in range(num_specs):
-        spec_temp = spec[:, i]
-        real_inds = np.argwhere(~np.isnan(spec_temp))
+    #First figure out if this is a 2d input or a 1d input
+    if len(spec.shape)==1:
+        #Then 1d
+        spec_temp = spec
+
+        #Need to remove Nan's
+        real_inds = np.where(~np.isnan(spec_temp))[0]
         spec_temp = spec_temp[real_inds]
         f_temp = f[real_inds]
-        swh = 4*np.sqrt(np.trapz(spec_temp[:, 0], x=f_temp[:, 0]))
-        swhs[i] = swh
+        swh = 4*np.sqrt(np.trapz(spec_temp, x=f_temp))
+        swhs = np.array(swh)
+        
+    elif len(spec.shape)==2:
+        #Then 2d
+        num_specs = spec.shape[1]
+        swhs = np.zeros(num_specs)
+        for i in range(num_specs):
+            spec_temp = spec[:, i]
+            ##Need to remove Nan's
+            real_inds = np.argwhere(~np.isnan(spec_temp))
+            spec_temp = spec_temp[real_inds]
+            f_temp = f[real_inds]
+            swh = 4*np.sqrt(np.trapz(spec_temp[:, 0], x=f_temp[:, 0]))
+            swhs[i] = swh
+    
+    else:
+        raise Exception("Array containing spectra to integrate must be either 1D or 2D")
+        
     return(swhs)
 
 
 
-def depth_correct_Eric(Eh, fwindow, em_z, nblock, Cmax, fs):
+def depth_correct_Eric(Eh, fwindow, em_z, prof_speed, nblock, Cmax, fs):
     """
     Returns spectra modified by D'Asaro 2015 depth correction for EM-APEX processed 
     
@@ -210,8 +239,7 @@ def depth_correct_Eric(Eh, fwindow, em_z, nblock, Cmax, fs):
     #z_mat = np.tile(em_z, (Eh.shape[0], 1))
     z_mat = em_z
     z_mat = np.tile(np.expand_dims(np.nanmean(z_mat, axis=1), axis=1), (1, len(k_mat[0, :])))
-    #print(np.expand_dims(np.nanmean(z_mat, axis=2), axis=2))
-
+    #print(z_mat)
 
     
     depth_fact = np.exp(2*k_mat*z_mat)
@@ -222,33 +250,41 @@ def depth_correct_Eric(Eh, fwindow, em_z, nblock, Cmax, fs):
     #### Now try applying the motion correction gain adjustment from D'Asaro 2015
 
     #First need to tile prof_speed
-    #prof_speed = np.tile(np.expand_dims(prof_speed, axis=1), (1, Eh.shape[1]))
-    #kWT2 = 1*k_mat*prof_speed*(nblock/fs)
+    #print(prof_speed.shape)
+    prof_speed = np.tile(np.expand_dims(prof_speed, axis=1), (1, Eh.shape[1]))
+    kWT2 = 1*k_mat*prof_speed*(nblock/fs)
+    #print(kWT2.shape)
     kWT = 1*k_mat*0.1*(nblock/fs)
     #Tile to be the right size
     
     
-    #G = np.square((np.square(np.pi)/(np.square(kWT/2)+np.square(np.pi)))*(np.sinh(kWT/2)/(kWT)))
-    G_mod = np.square((1/(2*np.pi))*np.sinh(kWT/2)/(np.power(kWT/(2*np.pi), 3)+kWT/(2*np.pi)))
+    G = np.square((np.square(np.pi)/(np.square(kWT/2)+np.square(np.pi)))*(np.sinh(kWT/2)/(kWT/2)))
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", category=RuntimeWarning)
+        G2 = np.square((np.square(np.pi)/(np.square(kWT2/2)+np.square(np.pi)))*(np.sinh(kWT2/2)/(kWT2/2)))
+    #If we get a nan value (which should occur when kWT2 = 0, just set the gain to 1 bc that's what it analytically works out to
+    G2[np.isnan(G2)]=1
+    #G_mod = np.square((1/(2*np.pi))*np.sinh(kWT/2)/(np.power(kWT/(2*np.pi), 3)+kWT/(2*np.pi)))
     #G_mod2 = np.square((1/(2*np.pi))*np.sinh(kWT2/2)/(np.power(kWT2/(2*np.pi), 3)+kWT2/(2*np.pi)))
     
-    #print(np.nanmean(G_mod2/G_mod))
-
-
-    Eh_G1 = Eh_out/G_mod
+    #print(np.nanmean(G/G2))
+    Eh_G1 = Eh_out/G2
     #print(np.nanmean(np.nanmean(G_mod, axis=0), axis=0))
 
     ### Try the 1s sampling correction
     #These are Andy's numbers
-    #d1 = 0.004897
-    #d2 = 0.033609
-    #d3 = 0.999897
+    d1 = 0.004897
+    d2 = 0.033609
+    d3 = 0.999897
     
-    d1 = 0.001642
-    d2 = 0.018517
-    d3 = 0.999528
+    #These are Eric's Numbers
+    #d1 = 0.001642
+    #d2 = 0.018517
+    #d3 = 0.999528
     G2 = d1*np.square(kWT)+d2*kWT+d3
-    Eh_G2 = Eh_G1/G2
+    G2mod = d1*np.square(kWT2)+d2*kWT2+d3
+    #print(np.nanmean(G2mod/G2))
+    Eh_G2 = Eh_G1/G2mod
 
     ###Now the final correction
     dw = 2*np.pi/nblock
@@ -256,10 +292,43 @@ def depth_correct_Eric(Eh, fwindow, em_z, nblock, Cmax, fs):
     h=0.25
    
     #G3 = 1/np.square(1+2*h*(np.cosh((2*omega*dw+np.square(dw)*z_mat)/9.8)-1))
-    G3 = 1/(1+2*h*(np.cosh((z_mat*np.square(omega_mat+dw)-np.square(omega_mat))/9.8)-1))
-    Eh_G3 = Eh_G2*G3
+    G3 = np.square((1+2*h*(np.cosh(z_mat*(np.square(omega_mat+dw)-np.square(omega_mat))/9.8)-1)))
+    Eh_G3 = Eh_G2/G3
+    
+    #IS this one supposed to be multiplied or divided?
     
     
     
     
     return(Eh_out, Eh_G1, Eh_G2, Eh_G3)
+
+
+def add_hf_tail(spec, f):
+    """
+    function to tack on an equilibrium range tail to a corrected EM-APEX spectrum
+    function should work on an input that is eithe 1D (a single spectrum) or 2d (multiple spectra)
+    
+    Input:
+        spec: numpy array containing spectra to add tail to. Should either be dimension (m x n), or (n,)
+            where m is the # of spectra to add tail to, and n is the number of points in the spectra
+            
+        f: frequency bins corresponding to the spectra. Should be dimension (n,)
+    """
+    
+    new_specs = np.copy(spec)
+    
+    for ind in range(spec.shape[0]):
+        #Get last non-NaN value in the spectrum
+        end_ind = np.where(np.isnan(spec[ind, :]))[0][0]-1
+        f_end = f[end_ind]
+        E_end = spec[ind, end_ind]
+        c = E_end/f_end**(-4)
+        extension = np.power(f, -4)*c
+        extension[:end_ind]=0
+        temp_spec = np.copy(spec_store_sorted_new_corr[ind, :])
+        temp_spec[end_ind:]=0
+  
+        extended_spec = temp_spec+extension
+        new_specs[ind]=extended_spec
+        
+    return(new_specs)
