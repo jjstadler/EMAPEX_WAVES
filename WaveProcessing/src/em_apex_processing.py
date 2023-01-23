@@ -50,12 +50,16 @@ def em_offset(N,t,nstep,navg,E1,E2,Hx,Hy):
     e1fit = np.empty((len(t), nblock))
     e2fit = np.empty((len(t), nblock))
     anghxhy = np.empty((len(t), nblock))
+    resids = np.empty((len(t), nblock))
 
     e1off.fill(np.nan)
     e2off.fill(np.nan)
     e1fit.fill(np.nan)
     e2fit.fill(np.nan)
     anghxhy.fill(np.nan)
+    resids.fill(np.nan)
+
+
 
 
 
@@ -82,9 +86,14 @@ def em_offset(N,t,nstep,navg,E1,E2,Hx,Hy):
         for k in range(1, N+1):
             BASIS=np.concatenate((BASIS,np.expand_dims(trnd**k, axis=1)), axis=1)        
 
-        [COEF1, resid, rank, s] = np.linalg.lstsq(BASIS, e1, rcond=None) # least squares fit
-        [COEF2, resid, rank, s] = np.linalg.lstsq(BASIS, e2, rcond=None)
-
+        [COEF1, resid1, rank, s] = np.linalg.lstsq(BASIS, e1, rcond=None) # least squares fit
+        [COEF2, resid2, rank, s] = np.linalg.lstsq(BASIS, e2, rcond=None)
+    
+        #Calculate the norm2 error
+        #lstsq returns the sum of the squares of the individual residuals
+        resid = np.sqrt(resid1+resid2)
+        #Put residual into an array of same value with length nstep
+        resid = np.ones(navg)*resid 
         
         #plt.figure()
         #plt.plot(np.matmul(BASIS, COEF2))
@@ -104,12 +113,13 @@ def em_offset(N,t,nstep,navg,E1,E2,Hx,Hy):
         e1off[j,nout]=e1b;
         e2off[j,nout]=e2b;
         e1fit[j,nout]=e1f;
-        e2fit[j,nout]=e2f; 
+        e2fit[j,nout]=e2f;
+        resids[j,nout] = resid;
 
 
         nout +=1
 
-    return e1off, e2off, e1fit, e2fit, anghxhy
+    return e1off, e2off, e1fit, e2fit, anghxhy, resids
 
 
 
