@@ -372,11 +372,14 @@ def get_spectral_uncertainity(E_x, E_y, Pef, u_noise, prof_speed, nblock, overla
     Output:
         spec_array -
     """
-    spec_array = []
+    #length of time series
     npoints = len(E_x)
+    
+    #number of iterations to run over?
     n_iterations=50
-    #TO DO: This frequency bin size should not be hard-coded
-    spec_store = np.zeros((n_iterations, 2, (nblock/2)-1))
+    
+    #Initialize array to store new spectra
+    spec_array = np.zeros((n_iterations, 2, (nblock/2)-1))
 
 
     for niter in range(n_iterations):
