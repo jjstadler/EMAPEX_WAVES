@@ -6,7 +6,6 @@ ocean surface waves by a vertically profiling subsurface float
 
 Tools are used by both the wave simulations code and the 1Hz processing code
 
-
 Note: Maybe this should really be structured differently --> Create an object that's a velocity timeseries, and then 
 that has all the different processing steps as different methods, but I don't feel like figuring out how to get all that workign right now
 """
@@ -153,7 +152,7 @@ def make_vel_spectrum(u_new, fs):
 
 
 
-def sig_wave_height(f, spec):
+def sig_wave_height(f, spec, uncertainty=None):
     """
     This function  calculates the significant wave height from a energy density spectrum, with frequencies f.
     
@@ -167,6 +166,8 @@ def sig_wave_height(f, spec):
     
     To Do: Does this work with 2d Spec v
     """
+    
+ 
     #First figure out if this is a 2d input or a 1d input
     if len(spec.shape)==1:
         #Then 1d
@@ -178,11 +179,19 @@ def sig_wave_height(f, spec):
         f_temp = f[real_inds]
         swh = 4*np.sqrt(np.trapz(spec_temp, x=f_temp))
         swhs = np.array(swh)
-        
+        if uncertainty is not None:
+            swh_upper = np.array(4*np.sqrt(np.trapz(spec_temp*uncertainty[1], x=f_temp)))-swhs
+            swh_lower = swhs-np.array(4*np.sqrt(np.trapz(spec_temp*uncertainty[0], x=f_temp)))
+        else:
+            swh_upper = None
+            swh_lower = None
+            
     elif len(spec.shape)==2:
         #Then 2d
         num_specs = spec.shape[1]
         swhs = np.zeros(num_specs)
+        swh_upper= np.zeros(num_specs)
+        swh_lower =np.zeros(num_specs)
         for i in range(num_specs):
             spec_temp = spec[:, i]
             ##Need to remove Nan's
@@ -191,11 +200,21 @@ def sig_wave_height(f, spec):
             f_temp = f[real_inds]
             swh = 4*np.sqrt(np.trapz(spec_temp[:, 0], x=f_temp[:, 0]))
             swhs[i] = swh
-    
+            if uncertainty is not None:
+                #print(np.array(4*np.sqrt(np.trapz(spec_temp[:, 0]*uncertainty[i, 1], x=f_temp))))
+                swh_upper[i] = np.array(4*np.sqrt(np.trapz(spec_temp[:, 0]*uncertainty[i, 1], x=f_temp[:, 0])))-swhs[i]
+                swh_lower[i] = swhs[i]-np.array(4*np.sqrt(np.trapz(spec_temp[:, 0]*uncertainty[i, 0], x=f_temp[:, 0])))
+                
+            else:
+                swh_upper[i] = None
+                swh_lower[i] = None
+                
     else:
         raise Exception("Array containing spectra to integrate must be either 1D or 2D")
+     
+    
+    return(swhs, swh_lower, swh_upper)
         
-    return(swhs)
 
 
 
@@ -325,10 +344,115 @@ def add_hf_tail(spec, f):
         c = E_end/f_end**(-4)
         extension = np.power(f, -4)*c
         extension[:end_ind]=0
-        temp_spec = np.copy(spec_store_sorted_new_corr[ind, :])
+        temp_spec = np.copy(spec[ind, :])
         temp_spec[end_ind:]=0
   
         extended_spec = temp_spec+extension
         new_specs[ind]=extended_spec
         
     return(new_specs)
+
+def get_moving_inds(Pef):
+    """
+    Function returns the indicies of the EM 1Hz timegrid where the float is moving. Input the pressure reading timeseries (in the time grid of the Em measurements) and it will return a list of indicies to use for the velocity fitting.
+    
+    Input: 
+        Pef: timesereis in the 1Hz timegrid of float pressure readings
+        
+    Output:
+        moving_inds: list of indicies once the float has started moving during that profile
+  
+    """
+    #initialize start_ind
+    start_ind = 0
+    #Loop through and find first ind where the float starts moving
+    for ind in range(0, len(Pef)-1):
+        if np.abs(Pef[ind+1]-Pef[ind])<0.0001:
+            continue
+        else:
+            start_ind = ind
+            break
+    
+    #Create array of indicies after the float starts moving
+    ind_list = np.array(list(range(start_ind, len(Pef))))
+    
+    return(ind_list)
+
+
+
+def get_spectral_uncertainity(E_x, E_y, Pef, u_noise, prof_speed, nblock, overlap, Cmax, fs):
+    """
+    This funciton outputs a range of possible spectrum based on a normal distribution of velocity noise
+    
+    TO DO: This takes a heck of a lot of inputs...Maybe think about how to streamline this?
+    
+    Input:
+    
+    
+    Output:
+        lbound
+        ubound
+        spec_array -
+    """
+    #length of time series
+    npoints = len(E_x)
+    
+    #Do a part here due to inherent spectral uncertainity due to DOFs
+    [u_x, z_x] = reshape_u(E_x, Pef, nblock, overlap, fs)
+    
+    #get number of blocks
+    nb = u_x.shape[0]
+    #This is from Percival and Walden textbook
+    DOF = 36*np.square(nb)/(19*nb - 1)
+    phi_inv = -1.96
+    phi_inv_m1 = 1.96
+    #At 95% CI
+    Qvp = DOF*( ( 1-(2/(DOF*9))+phi_inv*(((2/(DOF*9))**(1/2))))**3 )
+    Qvp_m1 = DOF*( ( 1-(2/(DOF*9))+phi_inv_m1*(((2/(DOF*9))**(1/2))))**3 )
+    
+    lbound = DOF/Qvp_m1
+    ubound = DOF/Qvp
+    
+    return(lbound, ubound)
+    
+    """
+    #This part is for estimating the spectral uncertainty due to velocity uncertainity
+    #number of iterations to run over?
+    n_iterations=50
+    
+    #Initialize array to store new spectra
+    spec_array = np.zeros((n_iterations, 2, (nblock/2)-1))
+
+
+    for niter in range(n_iterations):
+        rands = np.random.normal(0, u_noise, 2*npoints)    
+        E_x_new = E_x + rands[:npoints]
+        E_y_new = E_y + rans[npoints:]
+    
+        #Now just do the spectral processing steps
+        #1-Reshape
+        [u_x, z_x] = reshape_u(E_x_new, Pef, nblock, overlap, fs)
+
+        [u_y, z_y] = reshape_u(E_y_new, Pef, nblock, overlap, fs)
+
+        #2-Calculate raw spectrum
+        UUwindow, fwindow = make_vel_spectrum(u_x, fs)
+
+        VVwindow, fwindow = make_vel_spectrum(u_y, fs)
+    
+        #3-Compute Eric's Correction
+        
+        UU = UUwindow/(int(nblock/2)*fs)
+        Exx = UU[:,1:]/ (np.square((2*np.pi*fwindow[1:])))
+        VV = VVwindow/(int(nblock/2)*fs)
+        Eyy = VV[:,1:]/ (np.square((2*np.pi*fwindow[1:])))
+
+        Eh = Exx+Eyy
+        [Eh_Eric1, Eh_Eric2, Eh_Eric3, Eh_Eric4] = depth_correct_Eric(Eh, fwindow[1:], z_x, prof_speed, nblock, Cmax, fs)
+
+        with warnings.catch_warnings():
+                warnings.simplefilter("ignore", category=RuntimeWarning)
+                spec_array[counter, 0, :] = np.nanmean(Eh, axis=0)
+                spec_array[counter, 1, :] = np.nanmean(Eh_Eric4, axis=0) 
+    """
+    return(spec_array)
