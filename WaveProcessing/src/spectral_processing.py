@@ -152,7 +152,7 @@ def make_vel_spectrum(u_new, fs):
 
 
 
-def sig_wave_height(f, spec):
+def sig_wave_height(f, spec, uncertainty=None):
     """
     This function  calculates the significant wave height from a energy density spectrum, with frequencies f.
     
@@ -166,6 +166,8 @@ def sig_wave_height(f, spec):
     
     To Do: Does this work with 2d Spec v
     """
+    
+ 
     #First figure out if this is a 2d input or a 1d input
     if len(spec.shape)==1:
         #Then 1d
@@ -177,11 +179,19 @@ def sig_wave_height(f, spec):
         f_temp = f[real_inds]
         swh = 4*np.sqrt(np.trapz(spec_temp, x=f_temp))
         swhs = np.array(swh)
-        
+        if uncertainty is not None:
+            swh_upper = np.array(4*np.sqrt(np.trapz(spec_temp*uncertainty[1], x=f_temp)))-swhs
+            swh_lower = swhs-np.array(4*np.sqrt(np.trapz(spec_temp*uncertainty[0], x=f_temp)))
+        else:
+            swh_upper = None
+            swh_lower = None
+            
     elif len(spec.shape)==2:
         #Then 2d
         num_specs = spec.shape[1]
         swhs = np.zeros(num_specs)
+        swh_upper= np.zeros(num_specs)
+        swh_lower =np.zeros(num_specs)
         for i in range(num_specs):
             spec_temp = spec[:, i]
             ##Need to remove Nan's
@@ -190,11 +200,21 @@ def sig_wave_height(f, spec):
             f_temp = f[real_inds]
             swh = 4*np.sqrt(np.trapz(spec_temp[:, 0], x=f_temp[:, 0]))
             swhs[i] = swh
-    
+            if uncertainty is not None:
+                #print(np.array(4*np.sqrt(np.trapz(spec_temp[:, 0]*uncertainty[i, 1], x=f_temp))))
+                swh_upper[i] = np.array(4*np.sqrt(np.trapz(spec_temp[:, 0]*uncertainty[i, 1], x=f_temp[:, 0])))-swhs[i]
+                swh_lower[i] = swhs[i]-np.array(4*np.sqrt(np.trapz(spec_temp[:, 0]*uncertainty[i, 0], x=f_temp[:, 0])))
+                
+            else:
+                swh_upper[i] = None
+                swh_lower[i] = None
+                
     else:
         raise Exception("Array containing spectra to integrate must be either 1D or 2D")
+     
+    
+    return(swhs, swh_lower, swh_upper)
         
-    return(swhs)
 
 
 
@@ -370,11 +390,33 @@ def get_spectral_uncertainity(E_x, E_y, Pef, u_noise, prof_speed, nblock, overla
     
     
     Output:
+        lbound
+        ubound
         spec_array -
     """
     #length of time series
     npoints = len(E_x)
     
+    #Do a part here due to inherent spectral uncertainity due to DOFs
+    [u_x, z_x] = reshape_u(E_x, Pef, nblock, overlap, fs)
+    
+    #get number of blocks
+    nb = u_x.shape[0]
+    #This is from Percival and Walden textbook
+    DOF = 36*np.square(nb)/(19*nb - 1)
+    phi_inv = -1.96
+    phi_inv_m1 = 1.96
+    #At 95% CI
+    Qvp = DOF*( ( 1-(2/(DOF*9))+phi_inv*(((2/(DOF*9))**(1/2))))**3 )
+    Qvp_m1 = DOF*( ( 1-(2/(DOF*9))+phi_inv_m1*(((2/(DOF*9))**(1/2))))**3 )
+    
+    lbound = DOF/Qvp_m1
+    ubound = DOF/Qvp
+    
+    return(lbound, ubound)
+    
+    """
+    #This part is for estimating the spectral uncertainty due to velocity uncertainity
     #number of iterations to run over?
     n_iterations=50
     
@@ -411,6 +453,6 @@ def get_spectral_uncertainity(E_x, E_y, Pef, u_noise, prof_speed, nblock, overla
         with warnings.catch_warnings():
                 warnings.simplefilter("ignore", category=RuntimeWarning)
                 spec_array[counter, 0, :] = np.nanmean(Eh, axis=0)
-                spec_array[counter, 0, :] = np.nanmean(Eh_Eric4, axis=0) 
-
+                spec_array[counter, 1, :] = np.nanmean(Eh_Eric4, axis=0) 
+    """
     return(spec_array)
