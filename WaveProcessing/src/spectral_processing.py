@@ -455,4 +455,26 @@ def get_spectral_uncertainity(E_x, E_y, Pef, u_noise, prof_speed, nblock, overla
                 spec_array[counter, 0, :] = np.nanmean(Eh, axis=0)
                 spec_array[counter, 1, :] = np.nanmean(Eh_Eric4, axis=0) 
     """
-    return(spec_array)
+    
+    #return(spec_array)
+    
+def get_peak_freq(f, spec):
+    """
+    This function takes an array of frequency and an array of spectra, and returns the 
+    peak frequency, as well as the peak spectral level of the input spectrum
+    
+    Input:
+        f: (,N) shaped numpy array containing frequency bins
+        spec: (M,N), or (,N) shaped numpy array of spectra, or a single spectrum
+    Output:
+        peak_freq: Numpy array of peak frequencies
+        spec_level: Numpy array of peak spectral levels
+    """
+    freq_ind = np.argmax(spec, axis=1)
+    peak_freq = np.zeros(spec.shape[0])
+    spec_level = np.zeros(spec.shape[0])
+    for ind in range(spec.shape[0]):
+        spec_level[ind]=spec[ind, freq_ind[ind]]
+        peak_freq[ind] = f[freq_ind[ind]]
+    
+    return(peak_freq, spec_level)
