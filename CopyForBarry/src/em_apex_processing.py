@@ -214,6 +214,5 @@ def correct_magnetometer(HX, HY):
 
     hx_fixed = ellipse_out2[0, :]
     hy_fixed = ellipse_out2[1, :]
-    plt.scatter(hx_fixed, hy_fixed)
     
     return(hx_fixed, hy_fixed)

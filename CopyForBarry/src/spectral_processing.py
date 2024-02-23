@@ -20,7 +20,7 @@ import pandas as pd
 from src.em_apex_processing import *
 import pyIGRF
 from scipy import signal
-import scipy
+
 
 
 
@@ -353,7 +353,7 @@ def sig_wave_height(f, spec, uncertainty=None):
     To Do: Does this work with 2d Spec v
     """
     
-     
+ 
     #First figure out if this is a 2d input or a 1d input
     if len(spec.shape)==1:
         #Then 1d
@@ -366,11 +366,8 @@ def sig_wave_height(f, spec, uncertainty=None):
         swh = 4*np.sqrt(np.trapz(spec_temp, x=f_temp))
         swhs = np.array(swh)
         if uncertainty is not None:
-            nu_s =uncertainty[2]* np.square(np.sum(spec_temp))/np.sum(np.square(spec_temp))
-            llim = np.sqrt(nu_s/scipy.stats.chi2.ppf(1-.05/2, df=nu_s))*swh
-            ulim = np.sqrt(nu_s/scipy.stats.chi2.ppf(.05/2, df=nu_s))*swh
-            swh_upper = ulim#np.array(4*np.sqrt(np.trapz(spec_temp*uncertainty[1], x=f_temp)))-swhs
-            swh_lower = llim#swhs-np.array(4*np.sqrt(np.trapz(spec_temp*uncertainty[0], x=f_temp)))
+            swh_upper = np.array(4*np.sqrt(np.trapz(spec_temp*uncertainty[1], x=f_temp)))-swhs
+            swh_lower = swhs-np.array(4*np.sqrt(np.trapz(spec_temp*uncertainty[0], x=f_temp)))
         else:
             swh_upper = None
             swh_lower = None
@@ -387,21 +384,12 @@ def sig_wave_height(f, spec, uncertainty=None):
             real_inds = np.argwhere(~np.isnan(spec_temp))
             spec_temp = spec_temp[real_inds]
             f_temp = f[real_inds]
-            #print(spec_temp.shape)
             swh = 4*np.sqrt(np.trapz(spec_temp[:, 0], x=f_temp[:, 0]))
             swhs[i] = swh
             if uncertainty is not None:
                 #print(np.array(4*np.sqrt(np.trapz(spec_temp[:, 0]*uncertainty[i, 1], x=f_temp))))
-                #swh_upper[i] = np.array(4*np.sqrt(np.trapz(spec_temp[:, 0]*uncertainty[i, 1], x=f_temp[:, 0])))-swhs[i]
-                #swh_lower[i] = swhs[i]-np.array(4*np.sqrt(np.trapz(spec_temp[:, 0]*uncertainty[i, 0], x=f_temp[:, 0])))
-                
-                nu_s =uncertainty[i, 2]* np.square(np.sum(spec_temp[:, 0]))/np.sum(np.square(spec_temp[:, 0]))
-                #print(nu_s)
-                llim = np.sqrt(nu_s/scipy.stats.chi2.ppf(1-.05/2, df=nu_s))*swh
-                ulim = np.sqrt(nu_s/scipy.stats.chi2.ppf(.05/2, df=nu_s))*swh
-                  
-                swh_upper[i] = ulim-swh
-                swh_lower[i] = swh-llim
+                swh_upper[i] = np.array(4*np.sqrt(np.trapz(spec_temp[:, 0]*uncertainty[i, 1], x=f_temp[:, 0])))-swhs[i]
+                swh_lower[i] = swhs[i]-np.array(4*np.sqrt(np.trapz(spec_temp[:, 0]*uncertainty[i, 0], x=f_temp[:, 0])))
                 
             else:
                 swh_upper[i] = None
@@ -629,7 +617,7 @@ def get_spectral_uncertainity(E_x, E_y, Pef, u_noise, prof_speed, nblock, overla
         print("cl", cl)
         print("cu", cu)
     
-    return(cl, cu, nu)
+    return(cl, cu)
     
     """
     #This part is for estimating the spectral uncertainty due to velocity uncertainity
@@ -937,7 +925,7 @@ def process_files(fname_base, Cmax=10, navg=120, nstep=60, sim=False):
             HX = HX[moving_inds]
             HY = HY[moving_inds]
             mlt_efr = mlt_efr[moving_inds]
-            Pef = Pef[moving_inds]
+            Pef_moving = Pef[moving_inds]
 
             #Do the 50s fits 
             [e1offs,e2offs,e1fits,e2fits,anghxhy, resid] = em_offset(Nfit,mlt_efr,nstep_off,navg_off,E1,E2,HX,HY);
@@ -997,6 +985,13 @@ def process_files(fname_base, Cmax=10, navg=120, nstep=60, sim=False):
             E_x = E_x_filtered
             E_y = E_y_filtered
 
+
+
+
+            ##Get the mean residual level below 90m for the purpose of estimating error
+            deep_inds = np.where(Pef_moving>=90)
+            error = np.sqrt(np.square(e1r[deep_inds])+np.square(e2r[deep_inds]))
+            resid_store = np.append(resid_store, error)
 
 
             #Now take the spectra
@@ -1091,7 +1086,7 @@ def process_files(fname_base, Cmax=10, navg=120, nstep=60, sim=False):
                     Eh_Eric4 = Eh*depth_fact
 
                 u_noise = 0 #This is just for testing...
-                [lbound, ubound, nu] = get_spectral_uncertainity(E_x, E_y, Pef, u_noise, prof_speed, nblock, overlap, Cmax, fs)
+                [lbound, ubound] = get_spectral_uncertainity(E_x, E_y, Pef, u_noise, prof_speed, nblock, overlap, Cmax, fs)
                 
                 #Try propogating errors through and see if this has a different result
                 Eh_lbound = Eh*lbound
