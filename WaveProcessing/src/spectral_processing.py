@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import os
 from scipy.io import loadmat, savemat
 import pandas as pd
-from src.em_apex_processing import *
+from em_apex_processing import *
 import pyIGRF
 from scipy import signal
 import scipy
@@ -544,6 +544,10 @@ def add_hf_tail(spec, f):
             end_ind = np.where(np.isnan(spec[ind, :]))[0][0]-1
             f_end = f[end_ind]
             E_end = spec[ind, end_ind]
+
+            #Maybe E_end should be avg of last 3 points?
+            E_end = np.min(spec[ind, end_ind-3:end_ind+1])
+            
             c = E_end/f_end**(-4)
             extension = np.power(f, -4)*c
             extension[:end_ind]=0
@@ -714,11 +718,16 @@ def contains_spikes(E1, E2):
         has_spikes: boolean type - yes is one channel has large spikes, no if they're both good
     """
     
-    grad1 = np.gradient(E1)
-    grad2 = np.gradient(E2)
+    #Just want to check the middle ~80% of the array (away from top and bottom)
+    length = len(E1)
+    cut = int(np.floor(length/10))
+    
+    grad1 = np.gradient(E1[cut:-cut])
+    grad2 = np.gradient(E2[cut:-cut])
 
     grad_deviation1 = np.nanstd(grad1)
     grad_deviation2 = np.nanstd(grad2)
+    
     
     has_spikes = False
     if max(abs(grad1))>=abs(np.nanmean(grad1))+10*grad_deviation1:
@@ -762,6 +771,8 @@ def process_files(fname_base, Cmax=10, navg=120, nstep=60, sim=False):
     #########################
     #####Define Constants####
     #########################
+    plot_count=0
+    
     Cmax=10
     uVpc = 1e6 * (10e-3 / (2**24))
 
@@ -954,7 +965,13 @@ def process_files(fname_base, Cmax=10, navg=120, nstep=60, sim=False):
             #Calculate the residual
             e1r = E1 - e1fit
             e2r = E2 - e2fit
-            
+
+
+            if plot_count==0:
+                plt.figure()
+                plt.plot(E1[0:100])
+                plt.plot(e1fit[0:100])
+                plot_count=1
             #plt.figure()
             #plt.plot(E1[:600])
             #plt.plot(e1fit[:600])
