@@ -28,11 +28,13 @@ This directory contains two files:
 │   ├── src
 │   │   ├── em_apex_processing.py 
 │   │   └── spectral_processing.py
-│   ├── Process_LCDRI_1Hz.ipynb
-│   ├── Analyze_EM_vertical_Speeds.ipynb
-│   ├── Flowchart_figures.ipynb
-│   ├── Visualize_Fit_Differences.ipynb
-│   └──Test_Spectral_Uncertainty.ipynb
+│   ├── LCDRI_Maps.ipynb
+│   │   ├── This file contains the code for figures 1 and 2
+│   ├── Fits_and_Flowchart.ipynb
+│   │   ├── This file contains the code for figures 3 and 4
+│   ├── .ipynb
+│   ├── .ipynb
+│   └── .ipynb
 ├── WaveModelling/
 │   ├── 
 │   ├── 
