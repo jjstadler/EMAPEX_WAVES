@@ -10,13 +10,13 @@ for modelling linear surface waves and the resulting measurements by subsurface 
 ### src
 This directory contains two files:
 
-#### em_apex_processing.py
+1. em_apex_processing.py
 
-  Functions for transforming EM-APEX measurements in velocities and velocity residuals
+....* Functions for transforming EM-APEX measurements in velocities and velocity residuals
 
-#### spectral_processing.py
+2. spectral_processing.py
 
-  Functions for taking spectra of EM-APEX profiles
+....* Functions for taking spectra of EM-APEX profiles
 
 ## WaveModelling
 
