@@ -12,11 +12,11 @@ This directory contains two files:
 
 1. em_apex_processing.py
 
-....* Functions for transforming EM-APEX measurements in velocities and velocity residuals
+    * Functions for transforming EM-APEX measurements in velocities and velocity residuals
 
 2. spectral_processing.py
 
-....* Functions for taking spectra of EM-APEX profiles
+    * Functions for taking spectra of EM-APEX profiles
 
 ## WaveModelling
 
