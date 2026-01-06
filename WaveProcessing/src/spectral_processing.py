@@ -788,6 +788,8 @@ def process_files(fname_base, Cmax=10, navg=120, nstep=60, sim=False):
 
     nstep = 60
     navg = 120 
+    nblock=120
+    overlap=60
     Zmax=100
     Dirmax=80
     #electrode separation
@@ -810,11 +812,10 @@ def process_files(fname_base, Cmax=10, navg=120, nstep=60, sim=False):
     big_prof_store = []
     big_uncertainty_store = []
     big_loc_store = []
+    big_prof_speed_store = []
+    big_rotf_store = []
+    big_depth_store = []
     resid_store = np.array([])
-
-    #For investigating down profiles
-    #down_min_z = []
-    #up_min_z =[]
 
 
     up = True
@@ -839,17 +840,20 @@ def process_files(fname_base, Cmax=10, navg=120, nstep=60, sim=False):
 
         #Loop through each profile for that float
         files = os.listdir(dec_name)
-        if sim==True:
-            continue
-        else:
-            efr_files = [file for file in files if "efr.mat" in file and not file.startswith('.')]
-
-        spec_store = np.zeros((len(efr_files), 2 , 59))
+        #if sim==True:
+        #    continue
+        #else:
+        efr_files = [file for file in files if "efr.mat" in file and not file.startswith('.')]
+        spec_store = np.zeros((len(efr_files), 2 , (nblock//2)-1))
         time_store = np.zeros(len(efr_files))
+        depth_store = np.zeros(len(efr_files))
         up_down_store = np.zeros(len(efr_files))
-        uncertainty_store = np.zeros((len(efr_files), 2))
+        prof_speed_store = np.zeros(len(efr_files))
+        rotf_store = np.zeros(len(efr_files))
+        uncertainty_store = np.zeros((len(efr_files), 3))
         loc_store = np.zeros((len(efr_files), 2))
         prof_store = np.empty(len(efr_files), dtype=object)
+        
         counter=0
         #Load each profiling file, and then calculate the 1D spectrum
         for file in efr_files:
@@ -873,14 +877,24 @@ def process_files(fname_base, Cmax=10, navg=120, nstep=60, sim=False):
 
             #Load GPS file for calculating 
             # gps files are only on up profiles (even)
-            if prof_num%2==0:
-                up = True
-                cut = fname.find("efr")
-                gpsfname = fname[:cut]+"gps.mat"
-            else:
-                up = False
-                new_file = file.split('-')[0]+'-'+file.split('-')[1]+'-{:04d}'.format(prof_num+1)+"-"+file.split('-')[3]+'-gps.mat'
-                gpsfname = dec_name+new_file
+            if sim==False:
+                if prof_num%2==0:
+                    up = True
+                    cut = fname.find("efr")
+                    gpsfname = fname[:cut]+"gps.mat"
+                else:
+                    up = False
+                    new_file = file.split('-')[0]+'-'+file.split('-')[1]+'-{:04d}'.format(prof_num+1)+'-gps.mat'
+                    gpsfname = dec_name+new_file
+            elif sim==True:
+                if prof_num%2==0:
+                    up = True
+                    cut = fname.find("efr")
+                    gpsfname = fname[:cut]+"gps.mat"
+                else:
+                    up = False
+                    new_file = file.split('-')[0]+'-'+file.split('-')[1]+'-{:04d}'.format(prof_num+1)+'-'+file.split('-')[3]+'-gps.mat'
+                    gpsfname = dec_name+new_file
             GPS = loadmat(gpsfname)
 
             #Load CTD file 
@@ -937,10 +951,6 @@ def process_files(fname_base, Cmax=10, navg=120, nstep=60, sim=False):
             #Need to do this for all of E1, E2, HX, HY, mlt_efr
             moving_inds = get_moving_inds(Pef)
 
-            #Uncomment this to print out the filenames where EM starts before CTD
-            #if len(moving_inds)<len(Pef):
-                #print(len(Pef)-len(moving_inds), fname)
-                #continue
 
             #Apply moving_inds to the EM timeseries
             E1 = E1[moving_inds]
@@ -966,31 +976,18 @@ def process_files(fname_base, Cmax=10, navg=120, nstep=60, sim=False):
             e1r = E1 - e1fit
             e2r = E2 - e2fit
 
-
-            if plot_count==0:
-                plt.figure()
-                plt.plot(E1[0:100])
-                plt.plot(e1fit[0:100])
-                plot_count=1
-            #plt.figure()
-            #plt.plot(E1[:600])
-            #plt.plot(e1fit[:600])
-
-            
             
             ## Do spike detection
             #If either channel has spikes, ignore the profile.
-            #spikes=contains_spikes(E1, E2)
-            #if spikes:
-            #    print(fname)
-            #    continue
+            spikes=contains_spikes(E1, E2)
+            if spikes:
+                print(fname)
+                continue
 
 
             #Now need to convert to velocity (m/s)
             e1r = e1r*sfv1
             e2r = e2r*sfv2
-
-            #plt.plot(e1r)
             
             #Now use the angles to rotate to x-y coordinates
             avg_angs = np.copy(anghxhy)
@@ -1014,12 +1011,16 @@ def process_files(fname_base, Cmax=10, navg=120, nstep=60, sim=False):
             E_x = E_x_filtered
             E_y = E_y_filtered
 
-
+            ##Get the mean residual level below 90m for the purpose of estimating error
+            deep_inds = np.where(Pef>=90)
+            error = np.sqrt(np.square(e1r[deep_inds])+np.square(e2r[deep_inds]))
+            resid_store = np.append(resid_store, error)
+        
 
             #Now take the spectra
-            nblock = 120
+            nblock = navg
             fs = 1
-            overlap = 60
+            overlap = nstep
 
             #in the case where the float doesn't actually move for nblock measurements, need to skip it
             if len(E_x)<nblock:
@@ -1035,6 +1036,9 @@ def process_files(fname_base, Cmax=10, navg=120, nstep=60, sim=False):
 
             prof_speed = np.abs(z_x[:, 0]-z_x[:, -1])/np.abs(t_new[:, 0]-t_new[:, -1])
 
+            if u_x.shape[0]==1:
+                continue
+                
             prof_speed_new = np.zeros(len(prof_speed))
             for block_ind in range(z_x.shape[0]):
                 prof_speed_try = np.abs(np.gradient(z_x[block_ind, :], t_new[block_ind, :]))
@@ -1046,9 +1050,17 @@ def process_files(fname_base, Cmax=10, navg=120, nstep=60, sim=False):
             prof_speed = prof_speed_new
 
 
+                        
+            #Get the rotation frequency
+            time_s = np.abs(mlt_efr - mlt_efr[0])
+            rad_per_s = np.gradient(avg_angs, time_s) #radians per second. rotation period is 2pi/rad_per_s
+            rotf = rad_per_s/2/np.pi
+            
+            [rotf_reshaped, _] = reshape_u(rotf, Pef, nblock, overlap, fs)
+            
+            window_rotf = np.nanmean(rotf_reshaped, axis=1)
+
             zero_inds = np.where(prof_speed==0)[0]
-            #if len(zero_inds)>0:
-                #print(z_x[0, :])
 
             UUwindow, fwindow = make_vel_spectrum(u_x, fs)
 
@@ -1072,9 +1084,6 @@ def process_files(fname_base, Cmax=10, navg=120, nstep=60, sim=False):
                 if np.isnan(np.nanmean(np.nanmean(Eh, axis=0))):
                     #print("All NaNs!!")
                     if nancounter==0:
-                        #plt.loglog(fwindow, np.transpose(VVwindow))
-                        #plt.plot(np.transpose(u_y))
-                        #plt.loglog(fwindow[1:], np.transpose(Eh))
                         print(make_vel_spectrum(u_y, fs))
 
                     temp1 = np.expand_dims(np.array(E_x), axis=0)
@@ -1088,6 +1097,7 @@ def process_files(fname_base, Cmax=10, navg=120, nstep=60, sim=False):
                     nancounter+=1
 
                 [Eh_Eric1, Eh_Eric2, Eh_Eric3, Eh_Eric4] = depth_correct_Eric(Eh, fwindow[1:], z_x, prof_speed, nblock, Cmax, fs)
+               
                 if np.isnan(Eh_Eric4).all():
                     continue
                     #Then what happens is the float never moved?
@@ -1129,7 +1139,7 @@ def process_files(fname_base, Cmax=10, navg=120, nstep=60, sim=False):
                     time_store[counter] = np.nanmean(mlt_efr)
                     prof_store[counter] = float_id+"_"+str(prof_num)
 
-                    uncertainty_store[counter, :] = np.array([lbound, ubound])
+                    uncertainty_store[counter, :] = np.array([lbound, ubound, nu])
                     loc_store[counter, :] = np.array([avg_lat, avg_lon])
                     if prof_num%2==0:
                         #Then it's even and its an up profile
@@ -1151,13 +1161,19 @@ def process_files(fname_base, Cmax=10, navg=120, nstep=60, sim=False):
             big_up_down_store = up_down_store
             big_prof_store = prof_store
             big_loc_store = loc_store
+            big_prof_speed_store = prof_speed_store
+            big_rotf_store = rotf_store
+            big_depth_store = depth_store
         else:
             big_spec_store = np.append(big_spec_store, spec_store, axis=0)
             big_uncertainty_store = np.append(big_uncertainty_store,uncertainty_store, axis=0)
             big_time_store = np.append(big_time_store, time_store)
             big_up_down_store = np.append(big_up_down_store, up_down_store)
             big_prof_store = np.append(big_prof_store, prof_store)
+            big_prof_speed_store = np.append(big_prof_speed_store, prof_speed_store)
+            big_rotf_store = np.append(big_rotf_store, rotf_store)
             big_loc_store = np.append(big_loc_store, loc_store, axis=0)
+            big_depth_store = np.append(big_depth_store, depth_store)
 
 
 
@@ -1173,23 +1189,28 @@ def process_files(fname_base, Cmax=10, navg=120, nstep=60, sim=False):
     prof_store_shallow = np.delete(big_prof_store, kill[0], axis=0)
     uncertainty_store_shallow = np.delete(big_uncertainty_store, kill[0], axis=0)
     loc_store_shallow = np.delete(big_loc_store, kill[0], axis=0)
-
-    #Sort all the arrays by time
-    out = zip(spec_store_shallow, up_down_store_shallow, time_store_shallow, prof_store_shallow)
-    out2 = zip(uncertainty_store_shallow, time_store_shallow, loc_store_shallow)
+    big_prof_speed_shallow = np.delete(big_prof_speed_store, kill[0], axis=0)
+    big_rotf_shallow = np.delete(big_rotf_store, kill[0], axis=0)
+    big_depth_shallow = np.delete(big_depth_store, kill[0], axis=0)
+    
+    out = zip(spec_store_shallow, up_down_store_shallow, time_store_shallow, prof_store_shallow, big_depth_shallow)
+    out2 = zip(uncertainty_store_shallow, time_store_shallow, loc_store_shallow,big_prof_speed_shallow, big_rotf_shallow)
     #list(out)[0]
     sorted_array = sorted(out, key=lambda tup: tup[2])
     sorted_array2 = sorted(out2, key=lambda tup: tup[1])
-
-    unzipped = ([ a for a,b,c,d in sorted_array ], [ b for a,b,c,d in sorted_array ], [c for a,b,c,d in sorted_array], [d for a,b,c,d in sorted_array])
-    unzipped2 = ([ a for a,b,c in sorted_array2 ], [ b for a,b,c in sorted_array2 ], [c for a,b,c in sorted_array2])
-
+    
+    unzipped = ([ a for a,b,c,d,e in sorted_array ], [ b for a,b,c,d,e in sorted_array ], [c for a,b,c,d,e in sorted_array], [d for a,b,c,d,e in sorted_array], [e for a,b,c,d,e in sorted_array])
+    unzipped2 = ([ a for a,b,c,d,e in sorted_array2 ], [ b for a,b,c,d,e in sorted_array2 ], [c for a,b,c,d,e in sorted_array2], [d for a,b,c,d,e in sorted_array2], [e for a,b,c,d,e in sorted_array2])
+    
     spec_store_sorted = np.array(unzipped[0])
     up_down_store_sorted = np.array(unzipped[1])
     time_store_sorted = np.array(unzipped[2])
     prof_store_sorted = np.array(unzipped[3])
-
+    depth_store_sorted = np.array(unzipped[4])
+    
     uncertainty_store_sorted = np.array(unzipped2[0])
     loc_store_sorted = np.array(unzipped2[2])
+    prof_speed_store_sorted = np.array(unzipped2[3])
+    rotf_store_sorted = np.array(unzipped2[4])
     
-    return(spec_store_sorted, time_store_sorted, uncertainty_store_sorted, up_down_store_sorted, loc_store_sorted, prof_store_sorted, fwindow[1:])
+    return(spec_store_sorted, time_store_sorted, uncertainty_store_sorted, up_down_store_sorted, loc_store_sorted, prof_store_sorted, prof_speed_store_sorted, rotf_store_sorted, depth_store_sorted, fwindow[1:])
