@@ -1,13 +1,12 @@
 # EMAPEX_WAVES
 
 Repository containing code for calculating surface wave 
-spectra from EM-APEX 1Hz Votage measurements. This repository supports the work in (Stadler, et al 2025) (10.1175/JTECH-D-24-0023.1).  Two folders within this directory contain
-code for different purposes. The first, for processing EM-APEX 1Hz measurements, the second
-for modelling linear surface waves and the resulting predicted measurements by subsurface profiling float.
+spectra from EM-APEX 1Hz Votage measurements. This repository supports the work in (Stadler et al, 2025; 10.1175/JTECH-D-24-0023.1), follwing the work of D'Asaro, 2015, and Hsu, 2021. In addition to containing code for cacluting wave spectra, this repository contains notebooks for the analysis and figure generation for Stadler, 2025. Two folders within this directory contain code for different purposes. The first, for processing EM-APEX 1Hz measurements, the second
+for modelling linear surface waves and the resulting predicted measurements by subsurface profiling float. A guide for applying this algorithm to an EM-APEX dataset is provided below, as well as an overview of directory structure and code in this repository.
 
 ## WaveProcessing
 
-<img width="1000" height="800" alt="spectral_flowchart2" src="https://github.com/user-attachments/assets/30aa0348-d0ff-44a3-ba5a-5ea9c8a00631" />
+<img width="600" height="400" alt="spectral_flowchart2" src="https://github.com/user-attachments/assets/30aa0348-d0ff-44a3-ba5a-5ea9c8a00631" />
 
 
 ### src
