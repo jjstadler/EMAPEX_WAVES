@@ -8,7 +8,7 @@ for modelling linear surface waves and the resulting predicted measurements by s
 
 The script Process_LCDRI_1Hz.ipynb in this folder provides an outline for calculating 1D wave spectra and Hs measurements from EM-APEX 1Hz files. This script calls functions spectral_processing.process_files() and spectral_processing.sig_wave_height() to make these calcuations.
 
-<img width="500" height="400" alt="spectral_flowchart2" src="https://github.com/user-attachments/assets/30aa0348-d0ff-44a3-ba5a-5ea9c8a00631" />
+<img width="3529" height="1892" alt="FlowChart_for_README" src="https://github.com/user-attachments/assets/4717ef89-bef6-4de6-a2b6-597743c166bd" />
 
 
 ### src
