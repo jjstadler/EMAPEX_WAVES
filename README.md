@@ -24,7 +24,7 @@ This directory contains two files:
 
     * Functions for taking spectra of EM-APEX profiles
 
-## WaveModelling
+## WaveModeling
 
 
 ## Directory Structure
@@ -38,11 +38,15 @@ This directory contains two files:
 │   │   ├── This file contains the code for figures 1 and 2
 │   ├── Fits_and_Flowchart.ipynb
 │   │   ├── This file contains the code for figures 3 and 4
-│   ├── .ipynb
-│   ├── .ipynb
-│   └── .ipynb
+│   ├── Process_LCDRI_1Hz.ipynb
+│   │   ├── This file contains the code for figures 5 and 6
+│   ├── Load_Hs_daa.ipynb
+│   │   ├── This file contains the code for figures 7 and 8
+│   └── MinimumWaveHeight.ipynb
+│   │   ├── This file contains the code for figure 9
 ├── WaveModelling/
-│   ├── 
+│   ├── ResponseTime.ipynb
+│   │   ├── This file contains the code for modeling the resposne time of an EM-APEX float to surface wave velocities and figures Appendix B
 │   ├── 
 │   └──
 └── README.md
